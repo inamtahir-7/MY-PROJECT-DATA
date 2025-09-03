@@ -1,0 +1,435 @@
+import pandas as pd 
+
+df=pd.read_csv('data.csv')
+
+df.head()
+
+df.info()
+
+df.isnull().sum()
+
+df['class'].value_counts()
+
+
+
+
+
+
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+
+# 2. Basic structure
+print("Shape of dataset:", df.shape)
+print("\nData types:")
+print(df.dtypes.value_counts())
+
+print("\nFirst 5 rows:")
+print(df.head())
+
+# 3. Check for missing values
+print("\nMissing values per column:")
+print(df.isnull().sum())
+
+# 4. Summary statistics for numeric features
+print("\nSummary statistics (numeric columns):")
+print(df.describe())
+
+# 5. Class distribution
+plt.figure(figsize=(6,4))
+df['class'].value_counts().plot(kind='bar', color='skyblue', edgecolor='black')
+plt.title("Class Distribution")
+plt.xlabel("Class")
+plt.ylabel("Count")
+plt.show()
+
+# 6. Protocol type distribution
+plt.figure(figsize=(6,4))
+df['protocol_type'].value_counts().plot(kind='bar', color='orange', edgecolor='black')
+plt.title("Protocol Type Distribution")
+plt.xlabel("Protocol Type")
+plt.ylabel("Count")
+plt.show()
+
+# 7. Service distribution (top 10 services only)
+plt.figure(figsize=(8,4))
+df['service'].value_counts().nlargest(10).plot(kind='bar', color='green', edgecolor='black')
+plt.title("Top 10 Services")
+plt.xlabel("Service")
+plt.ylabel("Count")
+plt.show()
+
+# 8. Correlation heatmap (numeric columns only)
+plt.figure(figsize=(12,8))
+corr = df.select_dtypes(include=['int64','float64']).corr()
+sns.heatmap(corr, cmap='coolwarm', annot=False)
+plt.title("Correlation Heatmap")
+plt.show()
+
+# 9. Boxplot for a numeric column (example: src_bytes by class)
+plt.figure(figsize=(8,4))
+sns.boxplot(x='class', y='src_bytes', data=df)
+plt.title("Source Bytes by Class")
+plt.xticks(rotation=45)
+plt.show()
+
+# 10. Pairplot for a subset of features
+sampled_df = df.sample(1000, random_state=42)  # sample for speed
+sns.pairplot(sampled_df[['duration', 'src_bytes', 'dst_bytes', 'count', 'class']], hue='class')
+plt.show()
+
+
+df['protocol_type'].value_counts()
+
+df['service'].value_counts()
+
+data1 =df[df['class']=='normal']
+
+data1['src_bytes'].max()
+
+data2=df[df['class']=='anomaly']
+
+data2['src_bytes'].max()
+
+data2['src_bytes'].mean()
+
+data1['src_bytes'].mean()
+
+data2['src_bytes'].median()
+
+data2['src_bytes'].mode()
+
+data2['src_bytes'][400:500]
+
+data1['src_bytes'].median()
+
+X_train
+
+import pandas as pd
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, LabelEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.feature_selection import SelectKBest, mutual_info_classif
+from sklearn.pipeline import Pipeline
+import numpy as np
+
+# ---------------------------
+# 1. Separate features/target
+# ---------------------------
+categorical_features = ['protocol_type', 'service', 'flag']
+numeric_features = [col for col in df.columns if col not in categorical_features + ['class']]
+target_column = 'class'
+
+X = df.drop(columns=[target_column])
+y = df[target_column]
+
+# ---------------------------
+# 2. Encode target
+# ---------------------------
+le = LabelEncoder()
+y_enc = le.fit_transform(y)
+
+# ---------------------------
+# 3. Preprocessor (OHE + Scale)
+# ---------------------------
+preprocessor = ColumnTransformer(
+    transformers=[
+        ("categorical", OneHotEncoder(drop=None, handle_unknown="ignore"), categorical_features),
+        ("numeric", StandardScaler(), numeric_features)
+    ]
+)
+
+# ---------------------------
+# 4. Pipeline: Preprocessing + MI Feature Extraction
+# ---------------------------
+feature_selector = SelectKBest(score_func=mutual_info_classif, k=20)
+
+feature_pipeline = Pipeline([
+    ("preprocess", preprocessor),
+    ("feature_select", feature_selector)
+])
+
+# ---------------------------
+# 5. Fit pipeline on training
+# ---------------------------
+X_reduced = feature_pipeline.fit_transform(X, y_enc)
+
+# ---------------------------
+# 6. Get top 20 feature names with scores
+# ---------------------------
+# Get all transformed feature names from preprocessor
+ohe = feature_pipeline.named_steps["preprocess"].named_transformers_["categorical"]
+
+try:
+    ohe_features = ohe.get_feature_names_out(categorical_features)
+except AttributeError:
+    ohe_features = ohe.get_feature_names(categorical_features)
+
+all_features = np.concatenate([ohe_features, numeric_features])
+
+# Get feature scores from fitted SelectKBest
+mi_scores = feature_pipeline.named_steps["feature_select"].scores_
+
+# Combine features with their scores
+feature_scores = pd.DataFrame({
+    "Feature": all_features,
+    "Score": mi_scores
+})
+
+# Sort by score (descending) and pick top 20
+top_20_features = feature_scores.sort_values(by="Score", ascending=False).head(20)
+
+print(top_20_features)
+
+
+preprocessor
+
+y_enc
+
+dft = pd.DataFrame(X_reduced)
+
+
+dft.describe()
+
+X_reduced.shape
+
+from sklearn.model_selection import train_test_split
+
+# Split the dataset
+X_train_reduced, X_test_reduced, y_train_enc, y_test_enc = train_test_split(
+    X_reduced, y_enc, 
+    test_size=0.2,   # 20% test, 80% train
+    random_state=42, # reproducibility
+    stratify=y_enc   # keep class balance
+)
+
+print("Train shape:", X_train_reduced.shape, y_train_enc.shape)
+print("Test shape:", X_test_reduced.shape, y_test_enc.shape)
+
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neural_network import MLPClassifier
+
+# Logistic Regression
+log_reg = LogisticRegression(max_iter=1000, class_weight="balanced")
+log_reg.fit(X_train_reduced, y_train_enc)
+
+
+
+# Support Vector Machine (SVM)
+svm_clf = SVC(kernel='linear', probability=True)
+svm_clf.fit(X_train_reduced, y_train_enc)
+
+
+# Random Forest
+rf_clf = RandomForestClassifier(n_estimators=200, random_state=42)
+rf_clf.fit(X_train_reduced, y_train_enc)
+
+
+# Neural Network (MLP)
+mlp_clf = MLPClassifier(hidden_layer_sizes=(64, 32), max_iter=500, random_state=42)
+mlp_clf.fit(X_train_reduced, y_train_enc)
+
+
+import joblib
+
+# Save Logistic Regression
+joblib.dump(log_reg, "logistic_regression_model.pkl")
+
+# Save SVM
+joblib.dump(svm_clf, "svm_model.pkl")
+
+# Save Random Forest
+joblib.dump(rf_clf, "random_forest_model.pkl")
+
+# Save Neural Network (MLP)
+joblib.dump(mlp_clf, "mlp_model.pkl")
+
+print(" All models saved successfully!")
+
+
+import joblib
+
+log_reg_loaded = joblib.load("logistic_regression_model.pkl")
+svm_clf_loaded = joblib.load("svm_model.pkl")
+rf_clf_loaded = joblib.load("random_forest_model.pkl")
+mlp_clf_loaded = joblib.load("mlp_model.pkl")
+
+print(" All models loaded successfully!")
+
+
+import numpy as np
+from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
+
+
+model_files = ["logistic_regression_model.pkl", "svm_model.pkl", "random_forest_model.pkl","mlp_model.pkl"]  # put your saved model filenames here
+models = {name: joblib.load(name) for name in model_files}
+
+
+# . Evaluate each model
+# ---------------------------
+for model_name, model in models.items():
+    print(f"\n========== {model_name} ==========")
+    y_pred = model.predict(X_test_reduced)
+
+    # Accuracy
+    acc = accuracy_score(y_test_enc, y_pred)
+    print(f"Accuracy: {acc:.4f}")
+
+    # Classification report
+    print("\nClassification Report:")
+    print(classification_report(y_test_enc, y_pred, target_names=le.classes_))
+
+    # Confusion matrix
+    cm = confusion_matrix(y_test_enc, y_pred)
+    plt.figure(figsize=(6, 4))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", 
+                xticklabels=le.classes_, yticklabels=le.classes_)
+    plt.title(f"Confusion Matrix - {model_name}")
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.show()
+
+import pandas as pd
+
+df2=pd.read_csv('w3.pcap_Flow.csv')
+
+df2.head()
+
+df2.info()
+
+df.describe()
+
+import pandas as pd
+import numpy as np
+from tqdm import tqdm
+from collections import deque
+
+# Assume feature_pipeline, le, and models (log_reg, svm_clf, rf_clf, mlp_clf) are defined
+# Load CIC-IDS2017 dataset (adjust path)
+df_live = pd.read_csv('w3.pcap_Flow.csv')
+
+# Preprocess: Fill NaNs, parse Timestamp (adjust format if needed)
+df_live.fillna(0, inplace=True)
+df_live['Timestamp'] = pd.to_datetime(df_live['Timestamp'], errors='coerce')
+df_live = df_live.sort_values('Timestamp').reset_index(drop=True)
+
+# Define the 20 selected NSL-KDD features
+required_features = [
+    'src_bytes', 'dst_bytes', 'diff_srv_rate', 'same_srv_rate', 'dst_host_srv_count',
+    'flag_SF', 'dst_host_same_srv_rate', 'dst_host_diff_srv_rate', 'dst_host_serror_rate',
+    'logged_in', 'dst_host_srv_serror_rate', 'serror_rate', 'srv_serror_rate', 'count',
+    'flag_S0', 'dst_host_srv_diff_host_rate', 'service_http', 'dst_host_count',
+    'dst_host_same_src_port_rate', 'service_private'
+]
+
+# Initialize DataFrame with NSL-KDD structure (41 features, as pipeline expects them)
+nsl_columns = [
+    'duration', 'protocol_type', 'service', 'flag', 'src_bytes', 'dst_bytes', 'land',
+    'wrong_fragment', 'urgent', 'hot', 'num_failed_logins', 'logged_in', 'num_compromised',
+    'root_shell', 'su_attempted', 'num_root', 'num_file_creations', 'num_shells',
+    'num_access_files', 'num_outbound_cmds', 'is_host_login', 'is_guest_login', 'count',
+    'srv_count', 'serror_rate', 'srv_serror_rate', 'rerror_rate', 'srv_rerror_rate',
+    'same_srv_rate', 'diff_srv_rate', 'srv_diff_host_rate', 'dst_host_count',
+    'dst_host_srv_count', 'dst_host_same_srv_rate', 'dst_host_diff_srv_rate',
+    'dst_host_same_src_port_rate', 'dst_host_srv_diff_host_rate', 'dst_host_serror_rate',
+    'dst_host_srv_serror_rate', 'dst_host_rerror_rate', 'dst_host_srv_rerror_rate'
+]
+df_nsl = pd.DataFrame(0.0, index=df_live.index, columns=nsl_columns)
+
+# Map basic features (only those needed for top 20)
+df_nsl['src_bytes'] = df_live['TotLen Fwd Pkts']
+df_nsl['dst_bytes'] = df_live['TotLen Bwd Pkts']
+df_nsl['logged_in'] = ((df_live['Dst Port'].isin([20, 21, 22, 23, 25, 80, 110, 143, 443])) & 
+                       (df_live['ACK Flag Cnt'] > 0) & (df_live['TotLen Bwd Pkts'] > 0)).astype(int)
+df_nsl['protocol_type'] = df_live['Protocol'].map({6: 'tcp', 17: 'udp', 0: 'icmp'}).fillna('other')
+df_nsl['service'] = df_live['Dst Port'].map({
+    20: 'ftp_data', 21: 'ftp', 22: 'ssh', 23: 'telnet', 25: 'smtp', 53: 'domain',
+    67: 'domain_u', 68: 'domain_u', 80: 'http', 110: 'pop3', 143: 'imap', 443: 'http_443'
+}).fillna('private')
+
+def get_flag(row):
+    if row['Protocol'] != 6: return 'OTH'
+    syn, ack, rst, fin = row['SYN Flag Cnt'], row['ACK Flag Cnt'], row['RST Flag Cnt'], row['FIN Flag Cnt']
+    if syn > 0 and ack == 0 and rst == 0: return 'S0'
+    if rst > 0: return 'REJ'
+    if fin > 0 and syn > 0: return 'SF'
+    return 'SF' if ack > 0 else 'OTH'
+df_nsl['flag'] = df_live.apply(get_flag, axis=1)
+
+# Compute aggregated features (only for top 20)
+s_errors = ['S0', 'S1', 'S2', 'S3']
+for i in tqdm(range(len(df_live)), desc="Computing time-based features"):
+    curr_time = df_live['Timestamp'][i]
+    start = curr_time - pd.Timedelta(seconds=2)
+    window = df_live[(df_live['Timestamp'] > start) & (df_live['Timestamp'] <= curr_time)]
+    dst_ip, dst_port = df_live.loc[i, ['Dst IP', 'Dst Port']]
+    
+    host_win = window[window['Dst IP'] == dst_ip]
+    df_nsl.loc[i, 'count'] = len(host_win)
+    srv_win = window[window['Dst Port'] == dst_port]
+    df_nsl.loc[i, 'srv_count'] = len(srv_win)
+    
+    if len(host_win) > 0:
+        df_nsl.loc[i, 'same_srv_rate'] = len(srv_win) / len(host_win)
+        df_nsl.loc[i, 'diff_srv_rate'] = 1 - df_nsl.loc[i, 'same_srv_rate']
+        df_nsl.loc[i, 'serror_rate'] = host_win.apply(lambda r: get_flag(r) in s_errors, axis=1).mean()
+    if len(srv_win) > 0:
+        df_nsl.loc[i, 'srv_serror_rate'] = srv_win.apply(lambda r: get_flag(r) in s_errors, axis=1).mean()
+
+# Host-based features
+host_hist = {}
+for i in tqdm(range(len(df_live)), desc="Computing host-based features"):
+    dst_ip = df_live['Dst IP'][i]
+    host_hist.setdefault(dst_ip, deque(maxlen=100)).append(i)
+    host_idxs = list(host_hist[dst_ip])
+    
+    df_nsl.loc[i, 'dst_host_count'] = len(host_idxs)
+    dst_port = df_live['Dst Port'][i]
+    srv_idxs = [idx for idx in host_idxs if df_live.loc[idx, 'Dst Port'] == dst_port]
+    df_nsl.loc[i, 'dst_host_srv_count'] = len(srv_idxs)
+    
+    if len(host_idxs) > 0:
+        df_nsl.loc[i, 'dst_host_same_srv_rate'] = len(srv_idxs) / len(host_idxs)
+        df_nsl.loc[i, 'dst_host_diff_srv_rate'] = 1 - df_nsl.loc[i, 'dst_host_same_srv_rate']
+        src_port = df_live['Src Port'][i]
+        df_nsl.loc[i, 'dst_host_same_src_port_rate'] = sum(df_live.loc[idx, 'Src Port'] == src_port for idx in host_idxs) / len(host_idxs)
+        df_nsl.loc[i, 'dst_host_serror_rate'] = sum(df_nsl.loc[idx, 'flag'] in s_errors for idx in host_idxs) / len(host_idxs)
+    if len(srv_idxs) > 0:
+        df_nsl.loc[i, 'dst_host_srv_serror_rate'] = sum(df_nsl.loc[idx, 'flag'] in s_errors for idx in srv_idxs) / len(srv_idxs)
+        df_nsl.loc[i, 'dst_host_srv_diff_host_rate'] = len(set(df_live.loc[idx, 'Src IP'] for idx in srv_idxs)) / len(srv_idxs)
+
+df_nsl.fillna(0, inplace=True)
+
+# Apply pipeline (OHE, scale, select top 20)
+X_new_reduced = feature_pipeline.transform(df_nsl)
+
+# Predict with models
+def predict_model(model, name):
+    preds_enc = model.predict(X_new_reduced)
+    preds_multi = le.inverse_transform(preds_enc)  # Multi-class labels
+    normal_label_enc = le.transform(['normal'])[0]
+    preds_bin = (preds_enc != normal_label_enc).astype(int)  # 0=normal, 1=anomaly
+    
+    results = pd.DataFrame({
+        'MultiClass_Prediction': preds_multi,
+        'Binary_Prediction': ['Anomaly' if p == 1 else 'Normal' for p in preds_bin]
+    })
+    print(f"\n{name} Predictions (First 10 rows):")
+    print(results.head(10))
+    return results
+
+# Run predictions
+results_log_reg = predict_model(log_reg_loaded, "Logistic Regression")
+results_svm = predict_model(svm_clf_loaded, "SVM")
+results_rf = predict_model(rf_clf_loaded, "Random Forest")
+results_mlp = predict_model(mlp_clf_loaded, "MLP")
+
+# Save Random Forest predictions (example)
+results_rf.to_csv('predictions_random_forest.csv', index=False)
+
+X_new_reduced.shape
+
